@@ -37,18 +37,12 @@ impl MockRpcClientRequest {
     }
 }
 
-<<<<<<< HEAD:client/src/mock_rpc_client_request.rs
 impl GenericRpcClientRequest for MockRpcClientRequest {
     fn send(
         &self,
         request: RpcRequest,
         params: serde_json::Value,
-        _retries: usize,
     ) -> Result<serde_json::Value> {
-=======
-impl RpcSender for MockSender {
-    fn send(&self, request: RpcRequest, params: serde_json::Value) -> Result<serde_json::Value> {
->>>>>>> 4779858dd... Clean up RPCClient retry handling: only retry on 429, after a little sleep (#10182):client/src/mock_sender.rs
         if let Some(value) = self.mocks.write().unwrap().remove(&request) {
             return Ok(value);
         }

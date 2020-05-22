@@ -288,11 +288,7 @@ impl RpcClient {
 
     pub fn get_block_time(&self, slot: Slot) -> ClientResult<UnixTimestamp> {
         let request = RpcRequest::GetBlockTime;
-<<<<<<< HEAD
-        let response = self.client.send(request, json!([slot]), 0);
-=======
-        let response = self.sender.send(request, json!([slot]));
->>>>>>> 4779858dd... Clean up RPCClient retry handling: only retry on 429, after a little sleep (#10182)
+        let response = self.client.send(request, json!([slot]));
 
         response
             .map(|result_json| {
@@ -314,13 +310,8 @@ impl RpcClient {
     pub fn get_epoch_info_with_commitment(
         &self,
         commitment_config: CommitmentConfig,
-<<<<<<< HEAD
     ) -> ClientResult<RpcEpochInfo> {
-        self.send(RpcRequest::GetEpochInfo, json!([commitment_config]), 0)
-=======
-    ) -> ClientResult<EpochInfo> {
         self.send(RpcRequest::GetEpochInfo, json!([commitment_config]))
->>>>>>> 4779858dd... Clean up RPCClient retry handling: only retry on 429, after a little sleep (#10182)
     }
 
     pub fn get_leader_schedule(
@@ -559,13 +550,8 @@ impl RpcClient {
     pub fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> ClientResult<u64> {
         let request = RpcRequest::GetMinimumBalanceForRentExemption;
         let minimum_balance_json = self
-<<<<<<< HEAD
             .client
-            .send(request, json!([data_len]), 0)
-=======
-            .sender
             .send(request, json!([data_len]))
->>>>>>> 4779858dd... Clean up RPCClient retry handling: only retry on 429, after a little sleep (#10182)
             .map_err(|err| err.into_with_request(request))?;
 
         let minimum_balance: u64 = serde_json::from_value(minimum_balance_json)
@@ -1026,13 +1012,8 @@ impl RpcClient {
     {
         assert!(params.is_array() || params.is_null());
         let response = self
-<<<<<<< HEAD
             .client
-            .send(request, params, retries)
-=======
-            .sender
             .send(request, params)
->>>>>>> 4779858dd... Clean up RPCClient retry handling: only retry on 429, after a little sleep (#10182)
             .map_err(|err| err.into_with_request(request))?;
         serde_json::from_value(response)
             .map_err(|err| ClientError::new_with_request(err.into(), request))
@@ -1125,49 +1106,6 @@ mod tests {
     }
 
     #[test]
-<<<<<<< HEAD
-    fn test_retry_send() {
-        solana_logger::setup();
-        let (sender, receiver) = channel();
-        thread::spawn(move || {
-            // 1. Pick a random port
-            // 2. Tell the client to start using it
-            // 3. Delay for 1.5 seconds before starting the server to ensure the client will fail
-            //    and need to retry
-            let rpc_addr: SocketAddr = "0.0.0.0:4242".parse().unwrap();
-            sender.send(rpc_addr.clone()).unwrap();
-            sleep(Duration::from_millis(1500));
-
-            let mut io = IoHandler::default();
-            io.add_method("getBalance", move |_params: Params| {
-                Ok(Value::Number(Number::from(5)))
-            });
-            let server = ServerBuilder::new(io)
-                .threads(1)
-                .cors(DomainsValidation::AllowOnly(vec![
-                    AccessControlAllowOrigin::Any,
-                ]))
-                .start_http(&rpc_addr)
-                .expect("Unable to start RPC server");
-            server.wait();
-        });
-
-        let rpc_addr = receiver.recv().unwrap();
-        let rpc_client = RpcClient::new_socket(rpc_addr);
-
-        let balance: u64 = rpc_client
-            .send(
-                RpcRequest::GetBalance,
-                json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhw"]),
-                10,
-            )
-            .unwrap();
-        assert_eq!(balance, 5);
-    }
-
-    #[test]
-=======
->>>>>>> 4779858dd... Clean up RPCClient retry handling: only retry on 429, after a little sleep (#10182)
     fn test_send_transaction() {
         let rpc_client = RpcClient::new_mock("succeeds".to_string());
 
