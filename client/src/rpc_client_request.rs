@@ -4,8 +4,7 @@ use crate::{
     rpc_request::{RpcError, RpcRequest},
 };
 use log::*;
-use reqwest::{self, header::CONTENT_TYPE};
-use solana_sdk::clock::{DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT};
+use reqwest::{self, header::CONTENT_TYPE, StatusCode};
 use std::{thread::sleep, time::Duration};
 
 pub struct RpcClientRequest {
@@ -28,6 +27,7 @@ impl RpcClientRequest {
     }
 }
 
+<<<<<<< HEAD:client/src/rpc_client_request.rs
 impl GenericRpcClientRequest for RpcClientRequest {
     fn send(
         &self,
@@ -35,11 +35,16 @@ impl GenericRpcClientRequest for RpcClientRequest {
         params: serde_json::Value,
         mut retries: usize,
     ) -> Result<serde_json::Value> {
+=======
+impl RpcSender for HttpSender {
+    fn send(&self, request: RpcRequest, params: serde_json::Value) -> Result<serde_json::Value> {
+>>>>>>> 4779858dd... Clean up RPCClient retry handling: only retry on 429, after a little sleep (#10182):client/src/http_sender.rs
         // Concurrent requests are not supported so reuse the same request id for all requests
         let request_id = 1;
 
         let request_json = request.build_request_json(request_id, params);
 
+        let mut too_many_requests_retries = 5;
         loop {
             match self
                 .client
@@ -50,6 +55,19 @@ impl GenericRpcClientRequest for RpcClientRequest {
             {
                 Ok(response) => {
                     if !response.status().is_success() {
+                        if response.status() == StatusCode::TOO_MANY_REQUESTS
+                            && too_many_requests_retries > 0
+                        {
+                            too_many_requests_retries -= 1;
+                            debug!(
+                                "Server responded with {:?}, {} retries left",
+                                response, too_many_requests_retries
+                            );
+
+                            // Sleep for 500ms to give the server a break
+                            sleep(Duration::from_millis(500));
+                            continue;
+                        }
                         return Err(response.error_for_status().unwrap_err().into());
                     }
 
@@ -63,17 +81,8 @@ impl GenericRpcClientRequest for RpcClientRequest {
                     }
                     return Ok(json["result"].clone());
                 }
-                Err(e) => {
-                    info!("{:?} failed, {} retries left: {:?}", request, retries, e);
-                    if retries == 0 {
-                        return Err(e.into());
-                    }
-                    retries -= 1;
-
-                    // Sleep for approximately half a slot
-                    sleep(Duration::from_millis(
-                        500 * DEFAULT_TICKS_PER_SLOT / DEFAULT_TICKS_PER_SECOND,
-                    ));
+                Err(err) => {
+                    return Err(err.into());
                 }
             }
         }
