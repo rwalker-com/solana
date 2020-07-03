@@ -398,14 +398,25 @@ impl Stake {
         }
 
         let mut credits_observed = self.credits_observed;
+        dbg!(credits_observed);
         let mut total_rewards = 0f64;
         for (epoch, credits, prev_credits) in vote_state.epoch_credits() {
             // figure out how much this stake has seen that
             //   for which the vote account has a record
             let epoch_credits = if self.credits_observed < *prev_credits {
                 // the staker observed the entire epoch
+                dbg!((
+                    "entire epoch",
+                    self.delegation.stake(*epoch, stake_history),
+                    credits - prev_credits
+                ));
                 credits - prev_credits
             } else if self.credits_observed < *credits {
+                dbg!((
+                    "partial epoch",
+                    self.delegation.stake(*epoch, stake_history),
+                    credits - credits_observed
+                ));
                 // the staker registered sometime during the epoch, partial credit
                 credits - credits_observed
             } else {
@@ -414,7 +425,6 @@ impl Stake {
                 0
             };
 
-            dbg!((self.delegation.stake(*epoch, stake_history), epoch_credits));
             total_rewards += (self.delegation.stake(*epoch, stake_history) as u128
                 * epoch_credits as u128) as f64
                 * point_value;
@@ -426,7 +436,7 @@ impl Stake {
         if total_rewards < 1f64 {
             return None;
         }
-
+        dbg!((total_rewards, credits_observed));
         let (voter_rewards, staker_rewards, is_split) = vote_state.commission_split(total_rewards);
 
         if (voter_rewards < 1f64 || staker_rewards < 1f64) && is_split {
