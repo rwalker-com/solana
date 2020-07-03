@@ -672,6 +672,55 @@ impl Bank {
         });
     }
 
+    pub fn print_rewards_info(&self) {
+        let epoch = self.epoch();
+        let year = (self.epoch_schedule.get_last_slot_in_epoch(epoch)) as f64 / self.slots_per_year;
+        let period = self.epoch_schedule.get_slots_in_epoch(epoch) as f64 / self.slots_per_year;
+
+        let (validator_rewards, validator_inflation) = {
+            let inflation = self.inflation.read().unwrap();
+
+            (
+                (*inflation).validator(year) * self.capitalization() as f64 * period,
+                (*inflation).validator(year),
+            )
+        };
+
+        let validator_points = self.stakes.write().unwrap().claim_points();
+        let validator_point_value =
+            self.check_point_value(validator_rewards / validator_points as f64);
+
+        let paid_validator_rewards = self.fake_pay_validator_rewards(validator_point_value);
+
+        error!(
+            "print_rewards_info()\n
+                epoch: {}\n
+                epoch_schedule.get_last_slot_in_epoch: {}\n
+                epoch_schedule.get_slots_in_epoch: {}\n
+                slots_per_year: {}\n
+                year: {}\n
+                period: {}\n
+                capitalization: {}\n
+                validator_inflation: {}\n
+                validator_rewards: {}\n
+                paid_validator_rewards: {}\n
+                validator_point_value: {}\n
+                inflation: {:?}\n",
+            epoch,
+            self.epoch_schedule.get_last_slot_in_epoch(epoch),
+            self.epoch_schedule.get_slots_in_epoch(epoch),
+            self.slots_per_year,
+            year,
+            period,
+            self.capitalization(),
+            validator_inflation,
+            validator_rewards,
+            paid_validator_rewards,
+            validator_point_value,
+            self.inflation.read().unwrap(),
+        );
+    }
+
     // update reward for previous epoch
     fn update_rewards(&mut self, epoch: Epoch) {
         if epoch == self.epoch() {
@@ -707,6 +756,59 @@ impl Bank {
 
         self.capitalization
             .fetch_add(validator_rewards as u64, Ordering::Relaxed);
+    }
+
+    /// iterate over all stakes, redeem vote credits for each stake we can
+    ///   successfully load and parse, return total payout
+    fn fake_pay_validator_rewards(&self, point_value: f64) -> u64 {
+        let stake_history = self.stakes.read().unwrap().history().clone();
+        let mut validator_rewards = HashMap::new();
+
+        let total_validator_rewards = self
+            .stake_delegations()
+            .iter()
+            .map(|(stake_pubkey, delegation)| {
+                match (
+                    self.get_account(&stake_pubkey),
+                    self.get_account(&delegation.voter_pubkey),
+                ) {
+                    (Some(mut stake_account), Some(mut vote_account)) => {
+                        let rewards = stake_state::redeem_rewards(
+                            &mut stake_account,
+                            &mut vote_account,
+                            point_value,
+                            Some(&stake_history),
+                        );
+                        if let Ok((stakers_reward, voters_reward)) = rewards {
+                            //                            self.store_account(&stake_pubkey, &stake_account);
+                            //                            self.store_account(&delegation.voter_pubkey, &vote_account);
+
+                            if voters_reward > 0 {
+                                *validator_rewards
+                                    .entry(delegation.voter_pubkey)
+                                    .or_insert(0i64) += voters_reward as i64;
+                            }
+
+                            if stakers_reward > 0 {
+                                *validator_rewards.entry(*stake_pubkey).or_insert(0i64) +=
+                                    stakers_reward as i64;
+                            }
+
+                            stakers_reward + voters_reward
+                        } else {
+                            debug!(
+                                "stake_state::redeem_rewards() failed for {}: {:?}",
+                                stake_pubkey, rewards
+                            );
+                            0
+                        }
+                    }
+                    (_, _) => 0,
+                }
+            })
+            .sum();
+
+        total_validator_rewards
     }
 
     /// iterate over all stakes, redeem vote credits for each stake we can
@@ -5994,6 +6096,9 @@ mod tests {
 
         assert!(bank.is_delta.load(Ordering::Relaxed));
     }
+
+    #[test]
+    fn test_pay_validator_rewards() {}
 
     #[test]
     #[allow(clippy::float_cmp)]

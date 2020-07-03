@@ -414,6 +414,7 @@ impl Stake {
                 0
             };
 
+            dbg!((self.delegation.stake(*epoch, stake_history), epoch_credits));
             total_rewards +=
                 (self.delegation.stake(*epoch, stake_history) * epoch_credits) as f64 * point_value;
 

@@ -405,6 +405,10 @@ pub fn process_blockstore_from_root(
     );
     assert!(bank_forks.active_banks().is_empty());
 
+    let root = bank_forks.root_bank();
+    root.print_rewards_info();
+    std::process::exit(0);
+
     Ok((bank_forks, leader_schedule_cache))
 }
 
