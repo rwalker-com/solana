@@ -415,8 +415,9 @@ impl Stake {
             };
 
             dbg!((self.delegation.stake(*epoch, stake_history), epoch_credits));
-            total_rewards +=
-                (self.delegation.stake(*epoch, stake_history) * epoch_credits) as f64 * point_value;
+            total_rewards += (self.delegation.stake(*epoch, stake_history) as u128
+                * epoch_credits as u128) as f64
+                * point_value;
 
             // don't want to assume anything about order of the iterator...
             credits_observed = credits_observed.max(*credits);
